@@ -1,0 +1,93 @@
+# Replication package
+
+
+The package goes from the raw data to every table and figure of the paper and of its Online Appendix, in three steps, all run from the `replication/` folder:
+
+| Step | Command | Time | Output |
+|---|---|---|---|
+| 1. Build the panels from the raw data (optional) | `Rscript code/construction/00_build_panel.R` | under 1 min | Rebuilds the two analysis panels in `replication/rebuild/` and checks them against `data/processed/` (`results/check_panel_rebuild.txt`) |
+| 2. All new or revised tables and figures | `Rscript code/00_run_all.R` | about 2 min | `tables/`, `figures/`, `replication/results/`, `replication/logs/` |
+| 3. Figures unchanged since the submitted version (Figures 1, 3, 5) | `Rscript code/unchanged_figures/00_run_unchanged_figures.R` | under 1 min | `replication/output/` |
+
+Step 2 uses the processed panels shipped in `data/processed/`, so it can be run without step 1. In our checks, step 1 reproduces both panels exactly (every column, every observation), and step 2 reproduces every table of the manuscript to the last digit. The manuscript is then compiled from the root folder (Section 6).
+
+## 2. Data
+
+All raw files are in `replication/data/raw/`.
+
+| File | Source | Used for |
+|---|---|---|
+| `WEOOct2023all.csv` | IMF World Economic Outlook, October 2023 | Debt, primary balance, revenue, expenditure, growth, inflation, current account |
+| `GPR_historical_data.xls` | Caldara and Iacoviello (2022), monthly global and country indices (vintage used in the paper) | GPR shock |
+| `data_gpr_export_2026-11-04.xls` | Same source, downloaded on 4 November 2026 | Vintage check (identical over 1990–2022) |
+| `FRD_dataset.xlsx` | IMF Fiscal Rules Dataset (Davoodi et al., 2022) | Fiscal rules, escape clauses, fiscal councils |
+| `GSDB_v3.csv` | Global Sanctions Data Base, version 3 (Felbermayr et al., 2020) | Sanctions by type |
+| `datawar.xlsx` | UCDP/PRIO Armed Conflict Dataset, country-year extract | Armed-conflict indicators |
+| `Global_Policy_Uncertainty_Data.xlsx` | Baker, Bloom and Davis (2016), global EPU index (policyuncertainty.com; series GEPU_ppp, also distributed by FRED as GEPUPPP) | EPU shock |
+| `wdi_demographics.csv` | World Bank World Development Indicators, downloaded with the WDI R package | Five demographic variables kept in the panel; not used in the estimations |
+
+Data access: all sources are public. The Global Sanctions Data Base is distributed by its authors on request for research use; users should cite it and check its terms before redistributing the file. `code/construction/c07_demographics_download.R` downloads the WDI series again (internet access and the `WDI` and `countrycode` packages are needed); `c07_demographics.R` reads the stored copy.
+
+Processed data (`replication/data/processed/`):
+
+- `panel_analytique_FINAL_v3.rds`: panel of 60 emerging and developing economies, 1990–2022 (1,980 country-years, 87 variables).
+- `panel_frd_extended.rds`: the same panel with the fiscal-council and escape-clause variables (102 variables).
+- `gpr_country_annual.csv`: annual country GPR index and AR(1) shock for the 19 countries with a country-specific index, built by `code/00_gpr_country.R`.
+
+## 3. Software
+
+R 4.3.3. Packages: `data.table` (1.14.10), `ggplot2` (3.4.4), `brglm2` (0.9.2), `sandwich` (3.1.0), `readxl` (1.4.3) for steps 2 and 3; in addition `tidyverse`, `writexl`, `janitor` and `patchwork` for steps 1 and 3. The construction scripts must run in a UTF-8 locale, because some WEO country names are accented; the master scripts set it. The estimators (two-way fixed-effects local projections, standard errors clustered by country, Driscoll–Kraay standard errors, wild cluster bootstrap, probit and Firth average marginal effects) are coded in the scripts; `fixest` and `margins` are not required. `code/01_check_vs_fixest.R` shows that the local-projection code reproduces `fixest` output to three decimals (run it with `GPR_MEASURE=submitted`, the measure for which the reference values were recorded). LaTeX (pdflatex, bibtex) and the package `xr-hyper` are needed to compile the manuscript.
+
+Random seeds: wild cluster bootstrap 20261027; country-block bootstrap of Online Appendix Table OA.2: 1.
+
+## 4. Programs and correspondence with the paper
+
+Step 1, `code/construction/` (run in this order by `00_build_panel.R`):
+
+| Script | Builds |
+|---|---|
+| `c01_weo.R` | Country list and WEO variables |
+| `c02_gpr_submitted.R` | GPR variables of the submitted version (global index and the product GPRC × GPR; see Section 5) |
+| `c03_fiscal_rules.R` | Fiscal rules from the IMF Fiscal Rules Dataset |
+| `c04_sanctions.R` | Sanctions from the GSDB |
+| `c05_panel_assembly.R` | Assembled panel, lags and interactions |
+| `c06_wars.R` | Armed-conflict indicators |
+| `c07_demographics.R` | WDI demographic variables |
+| `c08_gpr_shock.R` | AR(1) shock of the submitted GPR measure (kept for comparison) |
+| `c09_frd_extension.R` | Fiscal-council and escape-clause variables |
+
+Step 2, `code/` (run in this order by `00_run_all.R`):
+
+| Script | Produces |
+|---|---|
+| `00_gpr_country.R` | Country GPR index and shock used in the paper; check that the submitted measure equals the product GPRC × GPR (`results/gpr_check_product.csv`); vintage check |
+| `01_data.R`, `00_utils.R` | Panel preparation and estimation functions (sourced by the other scripts) |
+| `02_lp_results.R` | Tables 1, 3, 4, 5, 7, 9, 10, 11; Figures 4 and 6; Online Appendix Tables OA.3–OA.7, OA.9, OA.10 |
+| `03_epu.R` | Table 8 |
+| `04_fiscal_council.R` | Column (2) of Online Appendix Table OA.2 (discrete marginal effect of the fiscal council) |
+| `06_fig2_rules.R` | Figure 2 |
+| `07_gpr_measures.R` | Table 6 and Online Appendix Table OA.8 |
+| `08_figA2_gpr_regions.R` | Online Appendix Figure OA.2 |
+| `09_probit_presence.R` | Online Appendix Table OA.1 and Figure OA.1 |
+| `10_fc_escape.R` | Online Appendix Table OA.2 |
+
+Step 3, `code/unchanged_figures/`: Figure 1 (`fig1_debt_with_without_rules.R`), Figure 3 (`fig3_primary_balance_high_gpr.R`) and Figure 5 (`fig5a_ttests.R`, then `fig5b_cohens_d.R`). These are the original scripts with relative paths and one correction (a duplicated column in a merge of `fig5a_ttests.R`, without effect on the results). The figures in the paper have the same content; their title and notes are in the LaTeX caption.
+
+Table 2 is text. Every number cited in the text is in `results/key_numbers.txt` or `results/measures_key.txt`.
+
+## 5. Notes
+
+1. **Geopolitical risk measure.** The paper uses the Caldara–Iacoviello country index as published: the monthly share of newspaper articles that meet the geopolitical-risk criterion and mention the country, averaged over the year and expressed in basis points. The shock is the AR(1) innovation estimated country by country over 1990–2022, and it is set to zero for the 41 countries without a country-specific index. The submitted version multiplied the country index by the global index (`c02_gpr_submitted.R`); `00_gpr_country.R` documents this and `01_data.R` reproduces that measure when `GPR_MEASURE=submitted` is set, for comparison only.
+2. **EPU.** `03_epu.R` uses the global EPU file in `data/raw/`. If the file is removed, it downloads the same series from FRED; without either, it falls back on `results/tabG_epu_run_2026-10-28.csv`, the archived output of an earlier run, and records the source used in `results/epu_source.txt`.
+3. **Sample.** 60 countries; 19 have a country-specific GPR index and identify the shock coefficients. `results/identifying_variance_share_by_h.csv` reports, by horizon, the share of the residual variation of the shock carried by Russia and Ukraine and the identifying countries under financial sanctions.
+
+## 6. Compiling the manuscript
+
+The paper (`main.tex`) and the Online Appendix (`online_appendix.tex`) cross-reference each other through `xr-hyper`. Compile in this order: `pdflatex online_appendix`, `pdflatex main`, `bibtex online_appendix`, `bibtex main`, then `pdflatex` twice on each file.
+
+## References
+
+Baker, S. R., Bloom, N., Davis, S. J. (2016). Measuring economic policy uncertainty. Quarterly Journal of Economics 131(4), 1593–1636.
+Caldara, D., Iacoviello, M. (2022). Measuring geopolitical risk. American Economic Review 112(4), 1194–1225.
+Davoodi, H. R., Elger, P., Fotiou, A., Garcia-Macia, D., Han, X., Lagerborg, A., Lam, W. R., Medas, P. (2022). Fiscal rules and fiscal councils: Recent trends and performance during the COVID-19 pandemic. IMF Working Paper 22/11.
+Felbermayr, G., Kirilakha, A., Syropoulos, C., Yalcin, E., Yotov, Y. V. (2020). The Global Sanctions Data Base. European Economic Review 129, 103561.
